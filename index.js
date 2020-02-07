@@ -1,25 +1,47 @@
 // An implementation of https://github.com/rust-lang/datafrog
 const _ = require("lodash");
 
-const sortByFirstAsKey = ([k]) => k;
+const sortTuple = (a, b) => {
+  if (a.length != b.length) {
+    throw new Error("Can't sort different sized tuples. Tuples are not the same length:", a, b)
+  }
+  for (let index = 0; index < a.length; index++) {
+    const elementA = a[index];
+    const elementB = b[index];
+
+    if (Array.isArray(elementA)) {
+      return sortTuple(elementA, elementB)
+    }
+
+    if (elementA === elementB) {
+      continue
+    }
+
+    if (typeof elementA == "string") {
+      return elementA < elementB ? -1 : elementA > elementB ? 1 : 0
+    }
+
+    return elementA - elementB
+  }
+};
 
 // A sorted list of distinct tuples.
 class Relation {
-  constructor(fromArray, sortByFn = sortByFirstAsKey) {
-    this.sortByFn = sortByFn;
-    this.elements = _.uniqWith(_.sortBy(fromArray, sortByFn), _.isEqual);
+  constructor(fromArray, sortFn = sortTuple) {
+    this.sortFn = sortFn;
+    this.elements = _.uniqWith(fromArray.sort(sortFn), _.isEqual);
   }
 
   merge(otherRelation) {
-    if (otherRelation.sortByFn !== this.sortByFn) {
+    if (otherRelation.sortFn !== this.sortFn) {
       throw new Error(
-        "Merging a relation that doesn't have the same sortByFn!"
+        "Merging a relation that doesn't have the same sortFn!"
       );
     }
 
     return new Relation(
       this.elements.concat(otherRelation.elements),
-      this.sortByFn
+      this.sortFn
     );
   }
 
@@ -50,7 +72,7 @@ class Variable {
     // 1. Merge this.recent into this.stable.
     if (this.recent.elements.length > 0) {
       let recent = this.recent;
-      this.recent = new Relation([], recent.sortByFn);
+      this.recent = new Relation([], recent.sortFn);
 
       // TODO visualize this!
       // Merge smaller stable relations into our recent one. This keeps bigger

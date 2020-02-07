@@ -1,20 +1,20 @@
 const { Relation, Variable, gallop, joinHelper } = require("./index.js");
 
-const sortByIdentity = a => a;
+const sortNumbers = (a, b) => a - b;
 
 describe("Relation", () => {
   test("Create should sort + dedup", () => {
     const relation = new Relation(
       [1, 5, 5, 0, 1, 2, 3, 10, 19, 20],
-      sortByIdentity
+      sortNumbers
     );
     const expectedResult = [0, 1, 2, 3, 5, 10, 19, 20];
     expect(relation.elements).toEqual(expectedResult);
   });
 
   test("Merging should sort + dedup", () => {
-    const relationA = new Relation([1, 5, 5, 0, 1, 2, 3], sortByIdentity);
-    const relationB = new Relation([5, 2, 2, 6, 0, 9, 2], sortByIdentity);
+    const relationA = new Relation([1, 5, 5, 0, 1, 2, 3], sortNumbers);
+    const relationB = new Relation([5, 2, 2, 6, 0, 9, 2], sortNumbers);
     const expectedResult = [0, 1, 2, 3, 5, 6, 9];
     expect(relationA.merge(relationB).elements).toEqual(expectedResult);
   });
@@ -86,10 +86,10 @@ describe("joinHelper", () => {
     );
 
     const expectedResult = [
-      [1, "hi", "bob"],
       [1, "greetings", "bob"],
-      [2, "hello", "world"],
-      [2, "goodbye", "world"]
+      [1, "hi", "bob"],
+      [2, "goodbye", "world"],
+      [2, "hello", "world"]
     ];
 
     expect(output).toEqual(expectedResult);
@@ -130,14 +130,14 @@ describe("Variable", () => {
 
     const variable = new Variable();
     variable.insert(relation);
-    while (variable.changed()) {}
+    while (variable.changed()) { }
 
     expect(variable.stable[0]).toEqual(relation);
     expect(variable.recent.elements).toEqual([]);
     expect(variable.toAdd).toEqual([]);
 
     variable.insert(new Relation([[1, "bob"]]));
-    while (variable.changed()) {}
+    while (variable.changed()) { }
 
     expect(variable.stable[0]).toEqual(relation);
     expect(variable.recent.elements).toEqual([]);
@@ -162,7 +162,7 @@ describe("Variable", () => {
 
     variableA.insert(relationA);
     variableB.insert(relationB);
-    while (variableB.changed()) {}
+    while (variableB.changed()) { }
 
     let max = 0;
     while (variableA.changed() && max++ < 100) {
@@ -176,11 +176,11 @@ describe("Variable", () => {
 
     expect(variableA.stable.length).toEqual(1);
     expect(variableA.stable[0].elements).toEqual([
-      [1, "hi"],
-      [1, "greetings"],
       [1, "bob"],
-      [2, "hello"],
+      [1, "greetings"],
+      [1, "hi"],
       [2, "goodbye"],
+      [2, "hello"],
       [2, "world"]
     ]);
   });
