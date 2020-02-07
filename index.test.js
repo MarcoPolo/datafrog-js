@@ -1,6 +1,24 @@
-const { Relation, Variable, gallop, joinHelper } = require("./index.js");
+const { Relation, Variable, gallop, joinHelper, dedupBy, sortTuple } = require(".");
 
 const sortNumbers = (a, b) => a - b;
+
+describe("dedupBy", () => {
+  test("Should dedup array", () => {
+    let input = [0, 1, 1, 2, 3, 3,]
+    let expected = [0, 1, 2, 3]
+    dedupBy(input, (a, b) => a === b)
+    expect(input).toEqual(expected)
+  })
+
+  test("Should dedup tuples", () => {
+    let input = [[1, "bob"], [1, "bob"]]
+    expect(sortTuple(input[0], input[1])).toEqual(0);
+
+    dedupBy(input, (a, b) => sortTuple(a, b) === 0)
+    expect(input).toEqual([[1, "bob"]]);
+  });
+})
+
 
 describe("Relation", () => {
   test("Create should sort + dedup", () => {
@@ -164,8 +182,7 @@ describe("Variable", () => {
     variableB.insert(relationB);
     while (variableB.changed()) { }
 
-    let max = 0;
-    while (variableA.changed() && max++ < 100) {
+    while (variableA.changed()) {
       variableA.fromJoin(variableB, (k, vA, vB) => {
         return [k, vB];
       });
@@ -185,3 +202,31 @@ describe("Variable", () => {
     ]);
   });
 });
+
+describe("Reachability Query", () => {
+  test("On a small dataset, run the rule: nodes(y) <- nodes(x), edges(x,y)", () => {
+    var smallDataset = require("./smol-dataset.json")
+    const edgesRel = new Relation(smallDataset.edges)
+
+    // Our query is: Which nodes can be reached from node 1? Then Map it to get
+    // to our tuple form. The second item in the tuple doesn't matter.
+    const nodesRel = new Relation([1].map(n => [n, n]))
+
+    const edgesVar = new Variable()
+    const nodesVar = new Variable()
+
+    edgesVar.insert(edgesRel)
+    // Run until the insert is stable
+    while (edgesVar.changed()) { }
+
+    nodesVar.insert(nodesRel)
+    // Run into we have no new nodes to test our rules against
+    while (nodesVar.changed()) {
+      // This is the rule: nodes(y) <- nodes(x), edges(x,y)
+      nodesVar.fromJoin(edgesVar, (startNode, _node, endNode) => [endNode, endNode])
+    }
+
+    // We expect to reach 1, 2, and 3
+    expect(nodesVar.stable[0].elements).toEqual([[1, 1], [2, 2], [3, 3]])
+  })
+})

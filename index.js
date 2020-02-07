@@ -18,18 +18,50 @@ const sortTuple = (a, b) => {
     }
 
     if (typeof elementA == "string") {
-      return elementA < elementB ? -1 : elementA > elementB ? 1 : 0
+      return elementA < elementB ? -1 : 1
     }
 
     return elementA - elementB
   }
+
+  return 0
 };
+
+// Mutates the input array!
+// See https://doc.rust-lang.org/1.40.0/src/core/slice/mod.rs.html#1891 for a
+// great explanation of this algorithm.
+// Basically we bubble duplicates to the end of the array, then split the array
+// to before dupes and after dupes. O(n)
+// If the array is sorted, this will remove all duplicates.
+// comparatorFn should return true if the items are the same.
+function dedupBy(array, comparatorFn) {
+  let w = 1
+  for (let r = 1; r < array.length; r++) {
+    const rElement = array[r];
+    const wElementPrev = array[w - 1];
+    if (comparatorFn(rElement, wElementPrev)) {
+      // The same so we keep `w` where it is
+    } else {
+      // We need to swap the elements 
+      // But only swap if their indices are different (otherwise it's no-op)
+      if (r !== w) {
+        array[r] = array[w]
+        array[w] = rElement
+      }
+      w++
+    }
+  }
+  array.splice(w)
+}
 
 // A sorted list of distinct tuples.
 class Relation {
   constructor(fromArray, sortFn = sortTuple) {
     this.sortFn = sortFn;
-    this.elements = _.uniqWith(fromArray.sort(sortFn), _.isEqual);
+    const sorted = fromArray.sort(sortFn)
+    // _.uniqWith is 1000x slower
+    dedupBy(sorted, (a, b) => sortFn(a, b) === 0)
+    this.elements = sorted
   }
 
   merge(otherRelation) {
@@ -68,6 +100,14 @@ class Variable {
     joinInto(this, otherVariable, this, logicFn);
   }
 
+  toString() {
+    return JSON.stringify({
+      stable: this.stable.length ? this.stable.reduce((acc, relation) => acc.merge(relation)).elements : [],
+      recent: this.recent.elements,
+      toAdd: this.toAdd.length ? this.toAdd.reduce((acc, relation) => acc.merge(relation)).elements : [],
+    })
+  }
+
   changed() {
     // 1. Merge this.recent into this.stable.
     if (this.recent.elements.length > 0) {
@@ -101,6 +141,7 @@ class Variable {
       for (let index = 0; index < this.stable.length; index++) {
         const stableRelation = this.stable[index];
         toAdd.elements = toAdd.elements.filter(elem => {
+          // TODO change this to use the sortFn, then it'll be simpler & faster
           let searchIdx = gallop(stableRelation.elements, ([k]) => k < elem[0]);
 
           while (
@@ -235,4 +276,4 @@ function joinInto(inputVariableA, inputVariableB, outputVariable, logicFn) {
   outputVariable.insert(new Relation(results));
 }
 
-module.exports = { Relation, Variable, gallop, joinHelper };
+module.exports = { Relation, Variable, gallop, joinHelper, dedupBy, sortTuple };
