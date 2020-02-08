@@ -1,6 +1,4 @@
 // An implementation of https://github.com/rust-lang/datafrog
-const _ = require("lodash");
-
 const sortTuple = (a, b) => {
   if (a.length != b.length) {
     throw new Error("Can't sort different sized tuples. Tuples are not the same length:", a, b)
@@ -9,12 +7,12 @@ const sortTuple = (a, b) => {
     const elementA = a[index];
     const elementB = b[index];
 
-    if (Array.isArray(elementA)) {
-      return sortTuple(elementA, elementB)
-    }
-
     if (elementA === elementB) {
       continue
+    }
+
+    if (Array.isArray(elementA)) {
+      return sortTuple(elementA, elementB)
     }
 
     if (typeof elementA == "string") {
@@ -131,24 +129,29 @@ class Variable {
 
     // 2. Move this.toAdd into this.recent.
     if (this.toAdd.length > 0) {
-      // 2a. Merge all newly added relations.
+
+      // 2a. Restrict `toAdd` to tuples not in `this.stable`.
+      for (let toAddIndex = 0; toAddIndex < this.toAdd.length; toAddIndex++) {
+        const toAdd = this.toAdd[toAddIndex]
+        for (let index = 0; index < this.stable.length; index++) {
+          const stableRelation = this.stable[index];
+          toAdd.elements = toAdd.elements.filter(elem => {
+            let searchIdx = gallop(stableRelation.elements, (tuple) => stableRelation.sortFn(tuple, elem) < 0);
+            if (searchIdx < stableRelation.elements.length && stableRelation.sortFn(stableRelation.elements[searchIdx], elem) === 0) {
+              return false
+            }
+
+            return true;
+          });
+        }
+      }
+
+      // 2b. Merge all newly added relations.
       let toAdd = this.toAdd.pop();
       while (this.toAdd.length > 0) {
         toAdd = toAdd.merge(this.toAdd.pop());
       }
 
-      // 2b. Restrict `toAdd` to tuples not in `this.stable`.
-      for (let index = 0; index < this.stable.length; index++) {
-        const stableRelation = this.stable[index];
-        toAdd.elements = toAdd.elements.filter(elem => {
-          let searchIdx = gallop(stableRelation.elements, (tuple) => stableRelation.sortFn(tuple, elem) < 0);
-          if (searchIdx < stableRelation.elements.length && stableRelation.sortFn(stableRelation.elements[searchIdx], elem) === 0) {
-            return false
-          }
-
-          return true;
-        });
-      }
       this.recent = toAdd;
     }
 
@@ -159,10 +162,10 @@ class Variable {
 
 // Finds the first index for which predicate is false. Returns an index of
 // array.length if it will never be false
-// predFn takes the form of (x: number) => boolean
+// predFn takes the form of (tuple) => boolean
 function gallop(array, predFn, startIdx = 0) {
   if (array.length - startIdx <= 0 || !predFn(array[startIdx])) {
-    return 0;
+    return startIdx;
   }
 
   let step = 1;
@@ -199,6 +202,7 @@ function joinHelper(relationA, relationB, logicFn) {
     let elemAKey = relationA.elements[idxA][0];
     let elemBKey = relationB.elements[idxB][0];
 
+    // TODO – should probably use sortFn here so it works on more types
     if (elemAKey < elemBKey) {
       // We have to move idxA up to catch to elemB
       idxA = gallop(relationA.elements, ([k]) => k < elemBKey, idxA);
@@ -209,14 +213,14 @@ function joinHelper(relationA, relationB, logicFn) {
       // They're equal. We have our join
 
       // Figure out the count of matches in each relation
-      const matchingCountA = _.takeWhile(
-        relationA.elements.slice(idxA),
-        ([k]) => k === elemAKey
-      ).length;
-      const matchingCountB = _.takeWhile(
-        relationB.elements.slice(idxB),
-        ([k]) => k === elemAKey
-      ).length;
+      let matchingCountA = 0
+      while (idxA + matchingCountA < relationA.elements.length && relationA.elements[idxA + matchingCountA][0] === elemAKey) {
+        matchingCountA++
+      }
+      let matchingCountB = 0
+      while (idxB + matchingCountB < relationB.elements.length && relationB.elements[idxB + matchingCountB][0] === elemAKey) {
+        matchingCountB++
+      }
 
       // Call logicFn on the cross product
       for (let i = 0; i < matchingCountA; i++) {
