@@ -86,7 +86,7 @@ class Variable {
   constructor() {
     // A list of already processed tuples.
     this.stable = [];
-    // A list of recently added but unprocessed tuples.
+    // Recently added but unprocessed tuples.
     this.recent = new Relation([]);
     // A list of tuples yet to be introduced.
     this.toAdd = [];
@@ -129,7 +129,7 @@ class Variable {
       this.stable.push(recent);
     }
 
-    // 2. Move this.to_add into this.recent.
+    // 2. Move this.toAdd into this.recent.
     if (this.toAdd.length > 0) {
       // 2a. Merge all newly added relations.
       let toAdd = this.toAdd.pop();
@@ -137,22 +137,15 @@ class Variable {
         toAdd = toAdd.merge(this.toAdd.pop());
       }
 
-      // 2b. Restrict `to_add` to tuples not in `this.stable`.
+      // 2b. Restrict `toAdd` to tuples not in `this.stable`.
       for (let index = 0; index < this.stable.length; index++) {
         const stableRelation = this.stable[index];
         toAdd.elements = toAdd.elements.filter(elem => {
-          // TODO change this to use the sortFn, then it'll be simpler & faster
-          let searchIdx = gallop(stableRelation.elements, ([k]) => k < elem[0]);
-
-          while (
-            searchIdx < stableRelation.elements.length &&
-            stableRelation.elements[searchIdx][0] === elem[0]
-          ) {
-            if (_.isEqual(stableRelation.elements[searchIdx], elem)) {
-              return false;
-            }
-            searchIdx++;
+          let searchIdx = gallop(stableRelation.elements, (tuple) => stableRelation.sortFn(tuple, elem) < 0);
+          if (searchIdx < stableRelation.elements.length && stableRelation.sortFn(stableRelation.elements[searchIdx], elem) === 0) {
+            return false
           }
+
           return true;
         });
       }
@@ -164,7 +157,8 @@ class Variable {
   }
 }
 
-// Finds the first index for which predicate is false. Returns an index of array.length if it will never be true
+// Finds the first index for which predicate is false. Returns an index of
+// array.length if it will never be false
 // predFn takes the form of (x: number) => boolean
 function gallop(array, predFn, startIdx = 0) {
   if (array.length - startIdx <= 0 || !predFn(array[startIdx])) {
@@ -198,13 +192,10 @@ function joinHelper(relationA, relationB, logicFn) {
   // Keep track of the indices into the relation's elements
   let idxA = 0;
   let idxB = 0;
-  let max = 0;
   while (
-    max < 100 &&
     idxA < relationA.elements.length &&
     idxB < relationB.elements.length
   ) {
-    max++;
     let elemAKey = relationA.elements[idxA][0];
     let elemBKey = relationB.elements[idxB][0];
 
